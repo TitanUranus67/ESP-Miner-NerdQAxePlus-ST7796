@@ -45,6 +45,213 @@ static void tint_screen_bg(lv_obj_t *screen, lv_color_t color, lv_opa_t opa)
     }
 }
 
+#ifdef ST7796_480X320
+static void add_steampunk_frame(lv_obj_t *screen)
+{
+    if (!screen) return;
+
+    lv_obj_set_style_bg_color(screen, lv_color_hex(0x031D32), LV_PART_MAIN);
+    lv_obj_set_style_bg_grad_dir(screen, LV_GRAD_DIR_NONE, LV_PART_MAIN);
+
+    // The stock artwork is 320x170. Scale it uniformly to 480x255 so it keeps
+    // its proportions, then use brass rails to make the remaining area feel
+    // intentional instead of stretching the artwork and its instruments.
+    const uint32_t count = lv_obj_get_child_cnt(screen);
+    for (uint32_t i = 0; i < count; ++i) {
+        lv_obj_t *child = lv_obj_get_child(screen, i);
+        if (lv_obj_check_type(child, &lv_img_class)) {
+            lv_img_set_zoom(child, 384); // 256 == 100%; 384 == 150%
+            apply_img_tint(child, lv_color_hex(0xD69A45), LV_OPA_20);
+        } else if (lv_obj_check_type(child, &lv_label_class)) {
+            lv_obj_set_x(child, lv_obj_get_x(child) * 3 / 2);
+            lv_obj_set_y(child, lv_obj_get_y(child) * 3 / 2);
+            lv_obj_set_style_text_color(child, lv_color_hex(0xF4D58A), LV_PART_MAIN);
+        }
+    }
+
+    lv_obj_t *frame = lv_obj_create(screen);
+    lv_obj_remove_style_all(frame);
+    lv_obj_set_size(frame, 476, 316);
+    lv_obj_center(frame);
+    lv_obj_set_style_bg_opa(frame, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(frame, 6, LV_PART_MAIN);
+    lv_obj_set_style_border_color(frame, lv_color_hex(0x19BFE8), LV_PART_MAIN);
+    lv_obj_set_style_outline_width(frame, 2, LV_PART_MAIN);
+    lv_obj_set_style_outline_color(frame, lv_color_hex(0x07557A), LV_PART_MAIN);
+    lv_obj_clear_flag(frame, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(frame, LV_OBJ_FLAG_CLICKABLE);
+
+    const lv_align_t corners[] = {LV_ALIGN_TOP_LEFT, LV_ALIGN_TOP_RIGHT,
+                                  LV_ALIGN_BOTTOM_LEFT, LV_ALIGN_BOTTOM_RIGHT};
+    const int8_t xs[] = {9, -9, 9, -9};
+    const int8_t ys[] = {9, 9, -9, -9};
+    for (int i = 0; i < 4; ++i) {
+        lv_obj_t *rivet = lv_obj_create(screen);
+        lv_obj_remove_style_all(rivet);
+        lv_obj_set_size(rivet, 9, 9);
+        lv_obj_set_style_radius(rivet, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(rivet, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(rivet, lv_color_hex(0x78E6F2), LV_PART_MAIN);
+        lv_obj_set_style_border_width(rivet, 2, LV_PART_MAIN);
+        lv_obj_set_style_border_color(rivet, lv_color_hex(0x087EA4), LV_PART_MAIN);
+        lv_obj_align(rivet, corners[i], xs[i], ys[i]);
+        lv_obj_clear_flag(rivet, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(rivet, LV_OBJ_FLAG_CLICKABLE);
+    }
+}
+
+static lv_obj_t *aquarium_panel(lv_obj_t *screen, int x, int y, int width, int height,
+                                const char *caption)
+{
+    lv_obj_t *plate = lv_obj_create(screen);
+    lv_obj_set_pos(plate, x, y);
+    lv_obj_set_size(plate, width, height);
+    lv_obj_clear_flag(plate, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(plate, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_radius(plate, 8, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(plate, lv_color_hex(0x062B45), LV_PART_MAIN);
+    lv_obj_set_style_bg_grad_dir(plate, LV_GRAD_DIR_NONE, LV_PART_MAIN);
+    lv_obj_set_style_border_width(plate, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(plate, lv_color_hex(0x168DB5), LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(plate, 0, LV_PART_MAIN);
+    lv_obj_move_background(plate);
+
+    if (caption) {
+        lv_obj_t *label = lv_label_create(plate);
+        lv_label_set_text(label, caption);
+        lv_obj_align(label, LV_ALIGN_TOP_LEFT, 8, 5);
+        lv_obj_set_style_text_color(label, lv_color_hex(0x7DE8F2), LV_PART_MAIN);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_10, LV_PART_MAIN);
+    }
+    return plate;
+}
+
+static void aquarium_place_value(lv_obj_t *label, int x, int y,
+                                 const lv_font_t *font, uint32_t color)
+{
+    if (!label) return;
+    lv_obj_set_align(label, LV_ALIGN_TOP_LEFT);
+    lv_obj_set_pos(label, x, y);
+    lv_obj_set_style_text_font(label, font, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, lv_color_hex(color), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_PART_MAIN);
+}
+
+static void aquarium_caption(lv_obj_t *screen, const char *text, int x, int y)
+{
+    lv_obj_t *label = lv_label_create(screen);
+    lv_label_set_text(label, text);
+    lv_obj_set_pos(label, x, y);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_10, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x61BFD5), LV_PART_MAIN);
+}
+
+static void aquarium_anim_set_x(void *obj, int32_t value)
+{
+    lv_obj_set_x(static_cast<lv_obj_t *>(obj), value);
+}
+
+static void aquarium_anim_set_y(void *obj, int32_t value)
+{
+    lv_obj_set_y(static_cast<lv_obj_t *>(obj), value);
+}
+
+static lv_obj_t *aquarium_blob(lv_obj_t *parent, int x, int y, int width, int height,
+                               uint32_t color)
+{
+    lv_obj_t *obj = lv_obj_create(parent);
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_pos(obj, x, y);
+    lv_obj_set_size(obj, width, height);
+    lv_obj_set_style_radius(obj, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(color), LV_PART_MAIN);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    return obj;
+}
+
+static void aquarium_animate_y(lv_obj_t *obj, int from, int to, uint32_t duration, uint32_t delay)
+{
+    lv_anim_t anim;
+    lv_anim_init(&anim);
+    lv_anim_set_var(&anim, obj);
+    lv_anim_set_exec_cb(&anim, aquarium_anim_set_y);
+    lv_anim_set_values(&anim, from, to);
+    lv_anim_set_time(&anim, duration);
+    lv_anim_set_delay(&anim, delay);
+    lv_anim_set_playback_time(&anim, duration);
+    lv_anim_set_repeat_count(&anim, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_set_path_cb(&anim, lv_anim_path_ease_in_out);
+    lv_anim_start(&anim);
+}
+
+static void aquarium_add_axolotl(lv_obj_t *screen)
+{
+    // Sand and plants establish a separate animation lane below the telemetry.
+    lv_obj_t *sand = aquarium_blob(screen, 8, 305, 464, 11, 0xC9A85D);
+    lv_obj_set_style_radius(sand, 2, LV_PART_MAIN);
+
+    const int plant_x[] = {22, 35, 444, 457};
+    const int plant_h[] = {29, 19, 24, 34};
+    for (int i = 0; i < 4; ++i) {
+        lv_obj_t *plant = aquarium_blob(screen, plant_x[i], 305 - plant_h[i], 5, plant_h[i], 0x23A879);
+        lv_obj_set_style_radius(plant, 3, LV_PART_MAIN);
+    }
+
+    // Axolotl assembled entirely from LVGL primitives.
+    lv_obj_t *axo = lv_obj_create(screen);
+    lv_obj_remove_style_all(axo);
+    lv_obj_set_pos(axo, -76, 268);
+    lv_obj_set_size(axo, 76, 35);
+    lv_obj_clear_flag(axo, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(axo, LV_OBJ_FLAG_CLICKABLE);
+
+    aquarium_blob(axo, 12, 11, 47, 18, 0xF48FB1); // body
+    aquarium_blob(axo, 0, 14, 17, 11, 0xE97CA6);  // tail, trailing on the left
+    aquarium_blob(axo, 52, 4, 22, 28, 0xFFA7C4);  // upright head facing right
+
+    // Forward-facing eyes and smile keep the head visually upright.
+    aquarium_blob(axo, 57, 12, 4, 4, 0x152331);
+    aquarium_blob(axo, 66, 12, 4, 4, 0x152331);
+    aquarium_blob(axo, 60, 22, 8, 3, 0xC24878);
+
+    // Feathery external gills on both sides of the upright head.
+    aquarium_blob(axo, 49, 3, 4, 10, 0xD94F87);
+    aquarium_blob(axo, 46, 8, 4, 8, 0xE56396);
+    aquarium_blob(axo, 72, 3, 4, 10, 0xD94F87);
+    aquarium_blob(axo, 74, 9, 2, 8, 0xE56396);
+
+    lv_obj_t *front_leg = aquarium_blob(axo, 43, 25, 5, 9, 0xF48FB1);
+    lv_obj_t *rear_leg = aquarium_blob(axo, 19, 25, 5, 9, 0xF48FB1);
+
+    lv_anim_t travel;
+    lv_anim_init(&travel);
+    lv_anim_set_var(&travel, axo);
+    lv_anim_set_exec_cb(&travel, aquarium_anim_set_x);
+    lv_anim_set_values(&travel, -76, 480);
+    lv_anim_set_time(&travel, 11000);
+    lv_anim_set_repeat_count(&travel, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_set_path_cb(&travel, lv_anim_path_linear);
+    lv_anim_start(&travel);
+
+    aquarium_animate_y(axo, 266, 271, 600, 0);
+    aquarium_animate_y(front_leg, 24, 28, 220, 0);
+    aquarium_animate_y(rear_leg, 28, 24, 220, 0);
+
+    // Three slow bubbles with staggered cycles.
+    const int bubble_x[] = {105, 336, 409};
+    const int bubble_size[] = {7, 5, 8};
+    for (int i = 0; i < 3; ++i) {
+        lv_obj_t *bubble = aquarium_blob(screen, bubble_x[i], 296, bubble_size[i], bubble_size[i], 0x78E6F2);
+        lv_obj_set_style_bg_opa(bubble, LV_OPA_40, LV_PART_MAIN);
+        lv_obj_set_style_border_width(bubble, 1, LV_PART_MAIN);
+        lv_obj_set_style_border_color(bubble, lv_color_hex(0xB9F7FF), LV_PART_MAIN);
+        aquarium_animate_y(bubble, 296, 258, 1600 + i * 300, i * 500);
+    }
+}
+#endif
+
 ///////////////////// SCREENS ////////////////////
 
 void UI::splash1ScreenInit(void)
@@ -414,6 +621,49 @@ void UI::miningScreenInit(void)
 
     addMiningScreenOverlays();
 }
+
+#ifdef ST7796_480X320
+void UI::applyAquariumMiningLayout()
+{
+    lv_obj_add_flag(ui_Image2, LV_OBJ_FLAG_HIDDEN);
+
+    // A compact instrument cluster leaves the bottom of the tank free for life.
+    aquarium_panel(ui_MiningScreen, 14, 10, 274, 136, "CURRENT HASHRATE");
+    aquarium_panel(ui_MiningScreen, 298, 10, 168, 136, nullptr);
+    aquarium_panel(ui_MiningScreen, 14, 154, 452, 96, nullptr);
+
+    aquarium_place_value(ui_lbHashrate, 38, 65, &ui_font_OpenSansBold45, 0xB9F7FF);
+    aquarium_caption(ui_MiningScreen, "GH/s", 216, 91);
+    aquarium_place_value(ui_lbASIC, 204, 24, &lv_font_montserrat_10, 0x78E6F2);
+    aquarium_place_value(ui_imgNet, 260, 22, &lv_font_montserrat_10, 0xFFFFFF);
+
+    aquarium_caption(ui_MiningScreen, "POWER", 312, 24);
+    aquarium_place_value(ui_lbPower, 312, 41, &ui_font_DigitalNumbers16, 0xB9F7FF);
+    aquarium_caption(ui_MiningScreen, "TEMP C", 400, 24);
+    aquarium_place_value(ui_lbTemp, 400, 38, &ui_font_OpenSansBold24, 0xFF9DC1);
+    aquarium_caption(ui_MiningScreen, "J/GH", 312, 82);
+    aquarium_place_value(ui_lbEficiency, 312, 100, &ui_font_DigitalNumbers16, 0x7BE0C3);
+    aquarium_caption(ui_MiningScreen, "FAN RPM", 400, 82);
+    aquarium_place_value(ui_lbRPM, 400, 100, &ui_font_OpenSansBold14, 0x7BE0C3);
+
+    aquarium_caption(ui_MiningScreen, "SESSION BEST", 30, 166);
+    ui_lbSessionBest = lv_label_create(ui_MiningScreen);
+    lv_label_set_text(ui_lbSessionBest, "0");
+    aquarium_place_value(ui_lbSessionBest, 30, 181, &ui_font_OpenSansBold14, 0xD9FBFF);
+    aquarium_caption(ui_MiningScreen, "ALL-TIME BEST", 132, 166);
+    aquarium_place_value(ui_lbBestDifficulty, 132, 181, &ui_font_OpenSansBold14, 0xD9FBFF);
+    aquarium_caption(ui_MiningScreen, "UPTIME", 252, 166);
+    aquarium_place_value(ui_lbTime, 252, 181, &ui_font_OpenSansBold13, 0xD9FBFF);
+    aquarium_caption(ui_MiningScreen, "ADDRESS", 30, 215);
+    aquarium_place_value(ui_lbIP, 94, 213, &ui_font_OpenSansBold13, 0x7BE0C3);
+
+    aquarium_place_value(ui_lbVinput, 252, 216, &lv_font_montserrat_10, 0x61BFD5);
+    aquarium_place_value(ui_lbVcore, 320, 216, &lv_font_montserrat_10, 0x61BFD5);
+    aquarium_place_value(ui_lbIntensidad, 392, 216, &lv_font_montserrat_10, 0x61BFD5);
+
+    aquarium_add_axolotl(ui_MiningScreen);
+}
+#endif
 
 void UI::settingsScreenInit(void)
 {
@@ -956,6 +1206,17 @@ void UI::init(Board* board, DisplayDriver *display)
     // ui_LogScreen_init();
 
     lv_disp_load_scr(ui_Splash1);
+
+#ifdef ST7796_480X320
+    add_steampunk_frame(ui_Splash1);
+    add_steampunk_frame(ui_Splash2);
+    add_steampunk_frame(ui_PortalScreen);
+    add_steampunk_frame(ui_MiningScreen);
+    add_steampunk_frame(ui_SettingsScreen);
+    add_steampunk_frame(ui_BTCScreen);
+    add_steampunk_frame(ui_GlobalStats);
+    applyAquariumMiningLayout();
+#endif
 
     if (isGenericTheme()) {
         lv_color_t tint = lv_color_make(255, 255, 255);

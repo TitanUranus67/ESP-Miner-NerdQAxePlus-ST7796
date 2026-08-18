@@ -15,6 +15,13 @@ endif()
 
 message(STATUS "Selected board: $ENV{BOARD}")
 
+# Optional display override for clones which retain the NerdQaxe++ pinout but
+# use a full-size 480x320 ST7796 panel.
+if("$ENV{DISPLAY}" STREQUAL "ST7796_480X320")
+    add_compile_definitions(ST7796_480X320)
+    message(STATUS "Selected display: ST7796 480x320")
+endif()
+
 set(ENV{SOURCE_DATE_EPOCH} 0)
 
 
@@ -42,4 +49,3 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 
 project(esp-miner)
-

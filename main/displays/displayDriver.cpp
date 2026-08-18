@@ -54,6 +54,45 @@ static void formatHashrate(char *buf, int len, float hashrate) {
     }
 }
 
+#ifdef ST7796_480X320
+static void initSt7796(esp_lcd_panel_io_handle_t io)
+{
+    // ST7796S vendor setup for 16-bit RGB565 over an 8-bit 8080 bus.
+    const uint8_t colmod[] = {0x55};
+    const uint8_t b2[] = {0x80, 0x02, 0x3B};
+    const uint8_t b7[] = {0xC6};
+    const uint8_t bb[] = {0x2C};
+    const uint8_t c0[] = {0x10};
+    const uint8_t c2[] = {0x01};
+    const uint8_t c3[] = {0x0B};
+    const uint8_t c4[] = {0x20};
+    const uint8_t c6[] = {0x0F};
+    const uint8_t d0[] = {0xA4, 0xA1};
+    const uint8_t e0[] = {0xD0, 0x00, 0x05, 0x0E, 0x15, 0x0D, 0x37, 0x43,
+                          0x47, 0x09, 0x15, 0x12, 0x16, 0x19};
+    const uint8_t e1[] = {0xD0, 0x00, 0x05, 0x0D, 0x0C, 0x06, 0x2D, 0x44,
+                          0x40, 0x0E, 0x1C, 0x18, 0x16, 0x19};
+
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0x11, NULL, 0));
+    vTaskDelay(pdMS_TO_TICKS(120));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0x3A, colmod, sizeof(colmod)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xB2, b2, sizeof(b2)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xB7, b7, sizeof(b7)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xBB, bb, sizeof(bb)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xC0, c0, sizeof(c0)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xC2, c2, sizeof(c2)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xC3, c3, sizeof(c3)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xC4, c4, sizeof(c4)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xC6, c6, sizeof(c6)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xD0, d0, sizeof(d0)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xE0, e0, sizeof(e0)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0xE1, e1, sizeof(e1)));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0x21, NULL, 0));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io, 0x29, NULL, 0));
+    vTaskDelay(pdMS_TO_TICKS(20));
+}
+#endif
+
 DisplayDriver::DisplayDriver() {
     m_animationsEnabled = false;
     m_lastKeypressTime = 0;
@@ -286,9 +325,26 @@ void DisplayDriver::lvglTimerTaskWrapper(void *param) {
 
 void DisplayDriver::safe_screen_change(lv_obj_t * new_scr, lv_scr_load_anim_t anim_type, uint32_t speed, uint32_t delay)
 {
+    if (!new_scr) {
+        ESP_LOGE(TAG, "Refusing to load a null LVGL screen");
+        m_screenAnimationRunning = false;
+        return;
+    }
+
+#ifdef ST7796_480X320
+    // LVGL 8.3.11 dereferences disp->scr_to_load after scr_load_internal()
+    // clears it when a second transition overlaps the first. The larger panel
+    // makes that timing window easy to hit during startup, so commit screen
+    // changes synchronously for this profile.
+    (void) anim_type;
+    (void) speed;
+    (void) delay;
+    m_screenAnimationRunning = false;
+    lv_scr_load_anim(new_scr, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
+#else
     m_screenAnimationRunning = true;
     _ui_screen_change(new_scr, anim_type, speed, delay);
-
+#endif
 }
 
 bool DisplayDriver::enterState(UiState s, int64_t now)
@@ -759,12 +815,20 @@ lv_obj_t *DisplayDriver::initTDisplayS3(void)
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_i80(i80_bus, &io_config, &io_handle));
 
+#ifdef ST7796_480X320
+    ESP_LOGI(TAG, "Install LCD driver for ST7796 480x320 profile");
+#else
     ESP_LOGI(TAG, "Install LCD driver of st7789");
+#endif
     esp_lcd_panel_handle_t panel_handle = NULL;
 
     esp_lcd_panel_dev_config_t panel_config = {
         .reset_gpio_num = TDISPLAYS3_PIN_NUM_RST,
+#ifdef ST7796_480X320
+        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,
+#else
         .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
+#endif
         .bits_per_pixel = 16,
     };
 
@@ -772,11 +836,24 @@ lv_obj_t *DisplayDriver::initTDisplayS3(void)
 
     esp_lcd_panel_reset(panel_handle);
     esp_lcd_panel_init(panel_handle);
+#ifdef ST7796_480X320
+    initSt7796(io_handle);
+#endif
     esp_lcd_panel_invert_color(panel_handle, true);
 
     esp_lcd_panel_swap_xy(panel_handle, true);
 
     Board *board = SYSTEM_MODULE.getBoard();
+#ifdef ST7796_480X320
+    // The clone is mounted opposite to the stock T-Display-S3. Flipping both
+    // axes preserves the existing user-facing "flip screen" setting.
+    if (!board->isFlipScreenEnabled()) {
+        esp_lcd_panel_mirror(panel_handle, false, false);
+    } else {
+        esp_lcd_panel_mirror(panel_handle, true, true);
+    }
+    esp_lcd_panel_set_gap(panel_handle, 0, 0);
+#else
     if (!board->isFlipScreenEnabled()) {
         esp_lcd_panel_mirror(panel_handle, true, false);
     } else {
@@ -785,6 +862,7 @@ lv_obj_t *DisplayDriver::initTDisplayS3(void)
 
     // the gap is LCD panel specific, even panels with the same driver IC, can have different gap value
     esp_lcd_panel_set_gap(panel_handle, 0, 35);
+#endif
 
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
@@ -857,7 +935,11 @@ void DisplayDriver::updateHashrate(System *module, StratumManager* manager, floa
     snprintf(strData, sizeof(strData), "%.1f", efficiency);
     lv_label_set_text(m_ui->ui_lbEficiency, (efficiency < 10000.0f) ? strData : "n/a"); // Update eficiency label
 
+#ifdef ST7796_480X320
+    snprintf(strData, sizeof(strData), "%.0fW", power);
+#else
     snprintf(strData, sizeof(strData), "%.3fW", power);
+#endif
     lv_label_set_text(m_ui->ui_lbPower, strData); // Actualiza el label
 }
 
@@ -878,6 +960,12 @@ void DisplayDriver::updateShares(StratumManager *manager, int pool)
         snprintf(strData, sizeof(strData), "%lld/%lld", manager->getSharesAccepted(), manager->getSharesRejected());
         lv_label_set_text(m_ui->ui_lbShares, strData); // Update shares
     }
+
+#ifdef ST7796_480X320
+    if (m_ui->ui_lbSessionBest) {
+        lv_label_set_text(m_ui->ui_lbSessionBest, manager->getBestSessionDiffString());
+    }
+#endif
 
     lv_label_set_text(m_ui->ui_lbBestDifficulty, manager->getBestDiffString());    // Update Bestdifficulty
     lv_label_set_text(m_ui->ui_lbBestDifficultySet, manager->getBestDiffString()); // Update Bestdifficulty
@@ -1011,7 +1099,11 @@ void DisplayDriver::updateGlobalState(int pool)
     snprintf(strData, sizeof(strData), "%d", POWER_MANAGEMENT_MODULE.getFanRPM(0));
     lv_label_set_text(m_ui->ui_lbRPM, strData); // Update label
 
+#ifdef ST7796_480X320
+    snprintf(strData, sizeof(strData), "%.0fW", POWER_MANAGEMENT_MODULE.getPower());
+#else
     snprintf(strData, sizeof(strData), "%.3fW", POWER_MANAGEMENT_MODULE.getPower());
+#endif
     lv_label_set_text(m_ui->ui_lbPower, strData); // Update label
 
     snprintf(strData, sizeof(strData), "%imA", (int) POWER_MANAGEMENT_MODULE.getCurrent());
