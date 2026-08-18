@@ -13,6 +13,10 @@ RUN apt-get update && \
 RUN groupadd -g 1000 builder && \
     useradd -m -u 1000 -g builder -s /bin/bash builder
 
+# ESP-IDF contains nested Git worktrees owned by root in the base image. The
+# build runs as the unprivileged builder user and queries OpenThread's version.
+RUN git config --system --add safe.directory /opt/esp/idf/components/openthread/openthread
+
 # Install bitaxetool
 RUN pip3 install bitaxetool
 
@@ -31,4 +35,3 @@ WORKDIR /home/builder/project
 
 # Switch to the unprivileged user
 USER builder
-

@@ -50,6 +50,7 @@ protected:
     lv_obj_t *ui_lbBestDifficulty = nullptr;
     lv_obj_t *ui_lbBestDifficultySet = nullptr;
     lv_obj_t *ui_lbHashrate = nullptr;
+    lv_obj_t *ui_lbSessionBest = nullptr;
     lv_obj_t *ui_lbRPM = nullptr;
     lv_obj_t *ui_lbASIC = nullptr;
     lv_obj_t *ui_Image4 = nullptr;
@@ -112,6 +113,9 @@ protected:
     void addInitScreenOverlays();
     void addMiningScreenOverlays();
     void addSplash2Overlays();
+#ifdef ST7796_480X320
+    void applyAquariumMiningLayout();
+#endif
 public:
     UI();
 
@@ -132,4 +136,3 @@ public:
 
     friend class DisplayDriver;
 };
-

@@ -77,6 +77,10 @@ cd ..
 git submodule update --init --recursive
 
 export BOARD="NERDQAXEPLUS2"
+
+# AliExpress/clone panel option: 480x320 ST7796 on the stock 8-bit LCD bus
+# (omit DISPLAY for the original 320x170 ST7789 panel)
+export DISPLAY="ST7796_480X320"
 ./docker/idf.sh set-target esp32s3
 
 # after each change on the source code
@@ -191,5 +195,4 @@ pip install --upgrade bitaxetool
 <img src="https://github.com/user-attachments/assets/3c485428-5e48-4761-9717-bd88579a747d" width="600px">
 
 The NerdQaxe+ firmware supports Influx and the repository provides an installation with Grafana dashboard that can be started with a few bash commands: https://github.com/shufps/ESP-Miner-NerdQAxePlus/tree/master/monitoring
-
 
